@@ -276,3 +276,90 @@
 ### 对整体项目的影响
 
 - 结构化输出更聚焦风险项，降低解析与存储成本，同时保留全量扫描的总体统计信息。
+
+## 2025-12-23T11:05:45+08:00
+
+### 修改目的
+
+- 增强 DBus system.d 扫描工具：对允许 root `own` 的 bus name，输出其 **未被 default policy deny 覆盖**的 methods，用于快速定位潜在“默认可调用”的高权限接口面。
+
+### 修改范围
+
+- 更新 `tools/check_dbus_system_conf.py`
+- 新增 `.codex/plan/dbus-systemd-root-service方法暴露检查工具.md`
+- 更新 `doc/architecture.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- 新增 `--services-file`：读取 D-Bus bus name 列表，基于 conf 中 `<policy user="root"><allow own="...">` 判断 root service。
+- 扫描并索引 `<policy context="default">` 下的 `deny send_*` 规则，按 `send_destination/send_path/send_path_prefix/send_interface/send_member/send_type` 匹配方法。
+- 使用 `busctl --system introspect --xml-interface` 递归枚举 object tree 的 methods；从全量 methods 中剔除 default deny 覆盖项，输出剩余 methods（`service -> object path -> interface -> method`）。
+- 输出同时包含该 service 对应的 conf 文件及其所属 deb 包（`dpkg-query -S`）；支持 `--json` 与 `--only-flagged` 结果过滤。
+
+### 对整体项目的影响
+
+- “DBus 高权限 service 默认暴露面”可被自动化生成证据，便于在交付检查/门禁中对 root-owned 服务的默认可调用方法面做风险收敛与整改跟踪。
+
+## 2025-12-23T11:09:05+08:00
+
+### 修改目的
+
+- 提升 root service methods 模式的可用性与可诊断性。
+
+### 修改范围
+
+- 更新 `tools/check_dbus_system_conf.py`
+- 更新 `.codex/plan/dbus-systemd-root-service方法暴露检查工具.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- service 模式文本输出改为按输入列表逐个输出（包含 `Status`/首条 `Error`），便于逐条核对与排障。
+- 修正缺少 `busctl` 时的错误传播路径，确保按约定返回 `127` 并输出明确错误信息。
+
+### 对整体项目的影响
+
+- 批量检查时输出更稳定、可读性更高，且在环境缺失依赖时可快速定位根因。
+
+## 2025-12-23T11:27:47+08:00
+
+### 修改目的
+
+- 使 root service methods 模式更贴近实际使用场景：自动拉起服务并过滤不具备业务风险意义的通用接口方法。
+
+### 修改范围
+
+- 更新 `tools/check_dbus_system_conf.py`
+- 新增 `.codex/plan/dbus-systemd-root-service工具增强-自动拉起与接口过滤.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- `busctl introspect` 默认启用 `--auto-start=yes`，提升对 activatable service 的覆盖率。
+- 枚举方法时排除 `org.freedesktop.DBus.Introspectable` / `org.freedesktop.DBus.Properties` / `org.freedesktop.DBus.Peer` 的 methods。
+
+### 对整体项目的影响
+
+- 输出聚焦更可能引发业务/安全风险的接口面，减少噪音；同时提升在交付环境中的可用性（可自动拉起被检查服务）。
+
+## 2025-12-23T11:33:16+08:00
+
+### 修改目的
+
+- 当 root service 存在未被 deny 管控的 methods 时，用明确状态标识风险，便于下游自动化处理。
+
+### 修改范围
+
+- 更新 `tools/check_dbus_system_conf.py`
+- 新增 `.codex/plan/dbus-root-service未管控method状态标记.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- 新增 `status=uncontrolled`：当 root service 枚举到的 methods 在剔除 default policy deny 后仍有残留时，`status` 不再为 `ok`。
+- `summary` 增加 `uncontrolled` 统计项。
+
+### 对整体项目的影响
+
+- CI/脚本可基于 `status` 直接筛选风险 service（无需再从 `methods` 是否为空推断），提升一致性与可维护性。
