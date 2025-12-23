@@ -64,8 +64,34 @@ python3 "./tools/check_service_cap.py" --services-file "./services.txt" --expect
 
 **输出（JSON）**
 
-- 顶层：`results`（逐 service 结果）、`summary`（计数汇总）
-- `results[].status`：`ok` / `not-found` / `mismatch` / `error`
+**JSON 字段（Schema）**
+
+- 顶层对象
+  - `results`: array
+  - `summary`: object
+- `results[]`（单个 service 结果）
+  - `service`: string（unit name）
+  - `status`: string（`ok` / `not-found` / `mismatch` / `error`）
+  - `load_state`: string（systemctl 的 LoadState 原值）
+  - `user`: string（空值视为 `root` 后的归一化结果）
+  - `group`: string
+  - `supplementary_groups`: string[]
+  - `groups`: string[]（group+supplementary 去重排序）
+  - `capability_bounding_set`: string[]
+  - `ambient_capabilities`: string[]
+  - `effective_capabilities`: string[]（按规则选取后的能力集）
+  - `rule`: string（`root->CapabilityBoundingSet` / `non-root->AmbientCapabilities`）
+  - `expected_capabilities`: string[]（仅当传入 `--expected-caps` 且 `status` 为 `ok/mismatch` 时存在）
+  - `match_expected`: boolean（仅当传入 `--expected-caps` 且 `status` 为 `ok/mismatch` 时存在）
+  - `missing_capabilities`: string[]（仅当传入 `--expected-caps` 且 `status` 为 `ok/mismatch` 时存在；不匹配时非空）
+  - `unexpected_capabilities`: string[]（仅当传入 `--expected-caps` 且 `status` 为 `ok/mismatch` 时存在；不匹配时非空）
+  - `error`: string（仅当 `status=error` 时存在）
+- `summary`（计数汇总）
+  - `total`: int
+  - `ok`: int
+  - `mismatch`: int
+  - `not_found`: int
+  - `error`: int
 
 **退出码**
 
@@ -103,9 +129,50 @@ python3 "./tools/check_service_fs_scope.py" --services-file "./services.txt" --j
 
 **输出（JSON）**
 
-- 顶层：`results`、`summary`
-- `results[].read_scope` / `results[].write_scope`：派生结构化范围
-- `results[].prefer_state_runtime_directory_hint`：提示信息
+**JSON 字段（Schema）**
+
+- 顶层对象
+  - `results`: array
+  - `summary`: object
+- `results[]`（单个 service 结果）
+  - `service`: string
+  - `status`: string（`ok` / `not-found` / `error`）
+  - `load_state`: string
+  - `protect_system`: string（`no`/`yes`/`full`/`strict` 等归一化值）
+  - `protect_home`: string（`no`/`yes`/`read-only`/`tmpfs` 等归一化值）
+  - `private_tmp`: boolean
+  - `no_new_privileges`: boolean
+  - `read_write_paths`: string[]
+  - `read_only_paths`: string[]
+  - `inaccessible_paths`: string[]
+  - `state_directory`: string[]
+  - `runtime_directory`: string[]
+  - `state_directory_paths`: string[]（由 `StateDirectory=` 派生，形如 `/var/lib/<name>`）
+  - `runtime_directory_paths`: string[]（由 `RuntimeDirectory=` 派生，形如 `/run/<name>`）
+  - `protect_system_read_only_roots`: string[]
+  - `protect_home_read_only_roots`: string[]
+  - `protect_home_inaccessible_roots`: string[]
+  - `protect_home_tmpfs_roots`: string[]
+  - `read_scope`: object
+    - `mode`: string（`all` / `all_except`）
+    - `except`: string[]（仅 `mode=all_except` 时存在）
+  - `write_scope`: object
+    - `mode`: string（`only` / `all_except`）
+    - `paths`: string[]（仅 `mode=only` 时存在）
+    - `read_only_roots`: string[]
+    - `inaccessible_paths`: string[]
+    - `writable_exceptions`: string[]（仅 `mode=all_except` 时存在）
+  - `prefer_state_runtime_directory_hint`: object
+    - `triggered`: boolean
+    - `paths`: string[]
+    - `message`: string
+  - `note`: string
+  - `error`: string（仅当 `status=error` 时存在）
+- `summary`
+  - `total`: int
+  - `ok`: int
+  - `not_found`: int
+  - `error`: int
 
 **退出码**
 
@@ -137,12 +204,37 @@ python3 "./tools/check_deb_binaries_privilege.py" --packages-file "./packages.tx
 
 **输出（JSON）**
 
-- 顶层：`results`、`summary`
-- `results[].findings[]`：
-  - `path`：二进制路径
-  - `capabilities`：`getcap` 输出（为空则无）
-  - `setuid` / `setgid`：布尔值
-  - `mode_octal`：权限位（含 suid/sgid/sticky 的 4 位八进制）
+**JSON 字段（Schema）**
+
+- 顶层对象
+  - `results`: array
+  - `summary`: object
+- `results[]`（单个 package 结果）
+  - `package`: string
+  - `status`: string（`ok` / `not-found` / `error`）
+  - `binaries_scanned`: int（仅当 `status=ok` 时存在）
+  - `findings`: array（仅当 `status=ok` 时存在）
+    - `findings[]`
+      - `path`: string
+      - `capabilities`: string | null（`getcap` 输出；无则为 null/缺省）
+      - `setuid`: boolean
+      - `setgid`: boolean
+      - `mode_octal`: string（形如 `0o4755`）
+  - `findings_count`: int（仅当 `status=ok` 时存在）
+  - `findings_with_caps`: int（仅当 `status=ok` 时存在）
+  - `findings_with_setuid`: int（仅当 `status=ok` 时存在）
+  - `findings_with_setgid`: int（仅当 `status=ok` 时存在）
+  - `error`: string（仅当 `status=error` 时存在）
+- `summary`
+  - `total`: int
+  - `ok`: int
+  - `not_found`: int
+  - `error`: int
+  - `binaries_scanned`: int
+  - `findings`: int
+  - `findings_with_caps`: int
+  - `findings_with_setuid`: int
+  - `findings_with_setgid`: int
 
 **退出码**
 
@@ -177,6 +269,35 @@ python3 "./tools/check_polkit_action_implicit.py" --actions-file "./actionids.tx
 - `ImplicitAny/ImplicitInactive/ImplicitActive`
 - `PolicyFiles`（若可定位）
 
+**输出（JSON）**
+
+**JSON 字段（Schema）**
+
+- 顶层对象
+  - `results`: array
+  - `summary`: object
+- `results[]`（单个 action 结果）
+  - `action_id`: string
+  - `status`: string（`ok` / `not-found` / `error`）
+  - `implicit`: object（仅当 `status=ok` 时存在）
+    - `implicit any`: string（若 pkaction 未输出该字段则可能缺省）
+    - `implicit inactive`: string（若 pkaction 未输出该字段则可能缺省）
+    - `implicit active`: string（若 pkaction 未输出该字段则可能缺省）
+  - `flagged`: boolean（仅当 `status=ok` 时存在）
+  - `flagged_fields`: object（仅当 `status=ok` 时存在）
+    - `implicit any`: boolean
+    - `implicit inactive`: boolean
+    - `implicit active`: boolean
+  - `policy_files`: string[]（仅当 `status=ok` 且 `flagged=true` 时存在）
+  - `packages`: string[]（仅当 `status=ok` 且 `flagged=true` 时存在）
+  - `error`: string（仅当 `status` 为 `not-found/error` 时存在）
+- `summary`
+  - `total`: int
+  - `ok`: int
+  - `not_found`: int
+  - `error`: int
+  - `flagged`: int
+
 **退出码**
 
 - `0`：全部检查完成（即使存在命中项也返回 0）
@@ -203,6 +324,29 @@ python3 "./tools/check_dbus_system_conf.py" --json --only-flagged
 - `Packages`
 - `AllowOwnInDefaultPolicy`
 
+**输出（JSON）**
+
+**JSON 字段（Schema）**
+
+- 顶层对象
+  - `results`: array
+  - `summary`: object
+  - `missing_dirs`: string[]（可选；扫描目录不存在时给出）
+- `results[]`（单个 conf 结果）
+  - `conf_file`: string
+  - `status`: string（`ok` / `error`）
+  - `flagged`: boolean（default policy 下存在 `allow own` 时为 true）
+  - `allow_own_in_default_policy`: string[]
+  - `findings_count`: int
+  - `packages`: string[]（仅对 `flagged=true` 的记录做 `dpkg-query -S` 反查，因此未命中项通常为空数组）
+  - `error`: string（仅当 `status=error` 时存在）
+- `summary`
+  - `total`: int
+  - `ok`: int
+  - `error`: int
+  - `flagged`: int
+  - `findings`: int
+
 #### 模式 B：root service 未被 default deny 覆盖的方法面（`--services-file`）
 
 读取 system bus name 列表（每行一个），并：
@@ -218,6 +362,45 @@ python3 "./tools/check_dbus_system_conf.py" --json --only-flagged
 python3 "./tools/check_dbus_system_conf.py" --services-file "./dbus_services.txt"
 python3 "./tools/check_dbus_system_conf.py" --services-file "./dbus_services.txt" --json --only-flagged
 ```
+
+**输出（JSON）**
+
+**JSON 字段（Schema）**
+
+- 顶层对象
+  - `results`: array
+  - `summary`: object
+  - `missing_dirs`: string[]（可选；扫描目录不存在时给出）
+- `results[]`（单个 service 结果）
+  - `service`: string（bus name）
+  - `status`: string（`ok` / `uncontrolled` / `not-root` / `not-found` / `error`）
+  - `flagged`: boolean（剔除 default deny 后仍存在残留 methods 时为 true）
+  - `conf_files`: string[]（当 `status != not-found` 时存在）
+  - `packages`: string[]（当 `status != not-found` 时存在；root service 会反查 conf_files 的 deb 归属；`not-root` 通常为空数组）
+  - `methods`: object（root service introspect 成功时存在；空对象表示未发现残留 methods）
+    - key: object path（string）
+    - value: object（interface -> methods）
+      - key: interface name（string）
+      - value: string[]（method names）
+  - `stats`: object（root service introspect 成功时存在）
+    - `object_paths_scanned`: int
+    - `methods_total`: int
+    - `methods_denied_by_default_policy`: int
+    - `methods_remaining`: int
+    - `deny_rules_count`: int
+  - `errors`: array（root service introspect 过程中按 object path 记录错误；可能为空数组）
+    - `errors[]`
+      - `object_path`: string
+      - `error`: string
+  - `error`: string（可选；命令超时/异常等致命错误时存在，且可能不包含 `methods/stats/errors`）
+- `summary`
+  - `total`: int
+  - `ok`: int
+  - `uncontrolled`: int
+  - `not_found`: int
+  - `not_root`: int
+  - `error`: int
+  - `flagged`: int
 
 **状态（`results[].status`）**
 
@@ -263,4 +446,3 @@ python3 "./tools/check_dbus_system_conf.py" --services-file "./dbus_services.txt
 python3 "./tools/check_service_cap.py" --services-file "./services.txt" --json > "./cap_report.json"
 python3 "./tools/check_dbus_system_conf.py" --services-file "./dbus_services.txt" --json --only-flagged > "./dbus_report.json"
 ```
-

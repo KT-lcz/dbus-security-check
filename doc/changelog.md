@@ -384,3 +384,26 @@
 ### 对整体项目的影响
 
 - 提升可用性与可维护性：新成员可基于 README 快速接入工具到 CI/CD，并减少对实现细节的反复询问。
+
+## 2025-12-23T13:17:28+08:00
+
+### 修改目的
+
+- 完善 `--json` 输出规范并减少无意义的输出噪音，便于下游脚本/门禁稳定消费。
+
+### 修改范围
+
+- 更新 `README.md`
+- 更新 `tools/check_service_fs_scope.py`
+- 更新 `tools/check_deb_binaries_privilege.py`
+- 新增 `.codex/plan/README-json-schema与summary清理.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- README 补齐各工具 JSON 输出字段 schema（包含 `results[].*` 与 `summary.*`，并说明字段存在条件与状态语义）。
+- 移除 `check_service_fs_scope.py` 与 `check_deb_binaries_privilege.py` 的 `summary.mismatch`（该工具不产生 `mismatch` 状态）。
+
+### 对整体项目的影响
+
+- JSON 消费端可直接基于 schema 做解析与校验，减少“看代码猜字段”的对接成本；同时 summary 更精简，降低噪音与误解风险。

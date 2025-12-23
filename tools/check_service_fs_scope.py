@@ -100,13 +100,11 @@ def _load_services(service: str | None, services_file: str | None) -> list[str]:
 
 
 def _build_summary(results: list[dict[str, Any]]) -> dict[str, int]:
-    summary = {"total": len(results), "ok": 0, "mismatch": 0, "not_found": 0, "error": 0}
+    summary = {"total": len(results), "ok": 0, "not_found": 0, "error": 0}
     for r in results:
         status = (r.get("status") or "").lower()
         if status == "ok":
             summary["ok"] += 1
-        elif status == "mismatch":
-            summary["mismatch"] += 1
         elif status == "not-found":
             summary["not_found"] += 1
         else:

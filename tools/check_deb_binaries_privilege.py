@@ -102,7 +102,6 @@ def _build_summary(results: list[dict[str, Any]]) -> dict[str, int]:
     summary = {
         "total": len(results),
         "ok": 0,
-        "mismatch": 0,
         "not_found": 0,
         "error": 0,
         "binaries_scanned": 0,
@@ -118,8 +117,6 @@ def _build_summary(results: list[dict[str, Any]]) -> dict[str, int]:
             summary["ok"] += 1
         elif status == "not-found":
             summary["not_found"] += 1
-        elif status == "mismatch":
-            summary["mismatch"] += 1
         else:
             summary["error"] += 1
 
