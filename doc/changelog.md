@@ -185,3 +185,94 @@
 ### 对整体项目的影响
 
 - “Polkit 配置合规检查”可由工具输出结构化证据，便于门禁/交付环节自动化筛查需要明道云登记的 actionid。
+
+## 2025-12-23T09:46:23+08:00
+
+### 修改目的
+
+- 抽取工具公共逻辑为内部模块，减少重复代码与同类 bug 多点修复成本。
+
+### 修改范围
+
+- 新增 `tools/_common.py`
+- 更新 `tools/check_service_cap.py`
+- 更新 `tools/check_service_fs_scope.py`
+- 更新 `tools/check_deb_binaries_privilege.py`
+- 更新 `tools/check_polkit_action_implicit.py`
+- 新增 `.codex/plan/tools公共模块抽取.md`
+- 更新 `doc/architecture.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- 统一实现：按行读取列表文件（支持 UTF-8 BOM/零宽字符清理）、外部命令执行、`systemctl show` 获取与 `key=value` 解析、缺少命令/缺少输入文件的错误分类与退出码。
+- 各工具改为复用 `tools/_common.py`，减少重复实现并保持行为一致。
+
+### 对整体项目的影响
+
+- 工具代码更易维护，后续新增检查项可复用公共能力，降低实现与排障成本。
+
+## 2025-12-23T09:53:59+08:00
+
+### 修改目的
+
+- 降低 Python 工具运行产生的缓存文件对工作区与评审的干扰。
+
+### 修改范围
+
+- 更新 `.gitignore`
+- 新增 `.codex/plan/python缓存目录忽略.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- 将 `tools/__pycache__/` 作为构建产物加入忽略列表。
+
+### 对整体项目的影响
+
+- 减少 `git status` 噪音与误提交风险，保持工具开发迭代过程更可控。
+
+## 2025-12-23T10:17:01+08:00
+
+### 修改目的
+
+- 新增 DBus system.d 配置检查能力：识别 default policy 下的 `allow own` 并输出证据与归属包。
+
+### 修改范围
+
+- 新增 `tools/check_dbus_system_conf.py`
+- 更新 `tools/_common.py`
+- 更新 `tools/check_polkit_action_implicit.py`
+- 新增 `.codex/plan/dbus-systemd默认policy-own检查工具.md`
+- 更新 `doc/architecture.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- 扫描 `/etc/dbus-1/system.d/` 与 `/usr/share/dbus-1/system.d/` 下所有 `*.conf`，解析 XML 并定位 `<policy context="default">` 下的 `<allow own="...">`。
+- 对命中项通过 `dpkg-query -S` 反查所属 deb 包并输出到报告；支持 `--json` 输出与汇总统计。
+- 将 `dpkg-query -S` 的解析/归属包查询抽取到 `tools/_common.py`，供 `check_polkit_action_implicit.py` 与新工具复用。
+
+### 对整体项目的影响
+
+- 为“DBus 系统总线配置合规”提供自动化证据输出，便于在 CI/CD 或交付检查中快速发现默认策略过宽的 `own` 授权。
+
+## 2025-12-23T10:23:44+08:00
+
+### 修改目的
+
+- 降低 DBus system.d 扫描工具在 `--json` 模式下的输出噪音，便于 CI/脚本消费。
+
+### 修改范围
+
+- 更新 `tools/check_dbus_system_conf.py`
+- 新增 `.codex/plan/dbus-systemd检查工具-only-flagged.md`
+- 更新 `doc/changelog.md`
+
+### 修改内容
+
+- 新增 `--only-flagged`：`--json` 时仅输出命中项（flagged）与错误项（status!=ok），`summary` 仍反映全量扫描统计。
+
+### 对整体项目的影响
+
+- 结构化输出更聚焦风险项，降低解析与存储成本，同时保留全量扫描的总体统计信息。

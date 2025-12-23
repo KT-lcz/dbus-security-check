@@ -10,6 +10,8 @@ import subprocess
 import sys
 from typing import Any, Iterable
 
+from _common import classify_file_not_found, read_non_empty_lines, run_command, sanitize_line
+
 
 # 基于 DBus 安全检查表的约定：
 # - 输入为 deb 包名列表（按行分隔），通过 dpkg-query 列出包内文件
@@ -24,44 +26,8 @@ SYSTEM_COMMANDS = {
     "getcap": "getcap",
 }
 
-_ZERO_WIDTH_TRANSLATION = str.maketrans(
-    "",
-    "",
-    "\ufeff\u200b\u200c\u200d\u2060",
-)
-
-
-def _sanitize_line(raw: str) -> str:
-    return raw.strip().translate(_ZERO_WIDTH_TRANSLATION)
-
-
-def _read_non_empty_lines(path: str) -> list[str]:
-    items: list[str] = []
-    with open(path, "r", encoding="utf-8-sig") as handle:
-        for raw in handle:
-            line = _sanitize_line(raw)
-            if not line or line.startswith("#"):
-                continue
-            items.append(line)
-    return items
-
-
-def _split_tokens(value: str) -> list[str]:
-    value = value.strip()
-    if not value:
-        return []
-    return [token for token in value.split() if token]
-
-
 def _run_command(args: list[str], timeout_seconds: float) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=timeout_seconds,
-    )
+    return run_command(args, timeout_seconds)
 
 
 def _is_pkg_not_installed_message(message: str) -> bool:
@@ -173,9 +139,9 @@ def _load_packages(package: str | None, packages_file: str | None) -> list[str]:
         raise ValueError("either a package argument or --packages-file is required")
 
     if package:
-        return [_sanitize_line(package)]
+        return [sanitize_line(package)]
 
-    packages = _read_non_empty_lines(packages_file or "")
+    packages = read_non_empty_lines(packages_file or "")
     if not packages:
         raise ValueError("packages file is empty")
     return packages
@@ -327,12 +293,9 @@ def main(argv: list[str]) -> int:
             return 1
         return 0
     except FileNotFoundError as exc:
-        missing = os.path.basename(getattr(exc, "filename", "") or "")
-        if missing in {SYSTEM_COMMANDS["dpkg_query"], SYSTEM_COMMANDS["getcap"]}:
-            print(f"ERROR: {missing} not found in PATH", file=sys.stderr)
-            return 127
-        print(f"ERROR: file not found: {getattr(exc, 'filename', '')}", file=sys.stderr)
-        return 1
+        exit_code, message = classify_file_not_found(exc, {SYSTEM_COMMANDS["dpkg_query"], SYSTEM_COMMANDS["getcap"]})
+        print(message, file=sys.stderr)
+        return exit_code
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

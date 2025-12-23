@@ -14,7 +14,9 @@
 - 工具：`tools/check_service_fs_scope.py`（输出 service 文件系统可读/可写范围摘要；检测 /var/lib /var/run /run 显式使用并给出 StateDirectory/RuntimeDirectory 提示）
 - 工具：`tools/check_deb_binaries_privilege.py`（扫描已安装 deb 包内可执行文件，输出具有 capabilities 或 setuid/setgid 的二进制与所属包）
 - 工具：`tools/check_polkit_action_implicit.py`（批量检查 actionid 的 implicit any/inactive/active，命中 yes/auth_self/auth_self_keep 时输出 actionid、所属包与配置）
-- 过程性文档：`doc/changelog.md`、`.codex/plan/DBus安全检查清单转换.md`、`.codex/plan/systemd-service-cap检查工具.md`、`.codex/plan/systemd-service-cap工具增强.md`、`.codex/plan/systemd-service-fs-scope检查工具.md`、`.codex/plan/deb二进制cap与s位检查工具.md`、`.codex/plan/polkit-actionid隐式授权检查工具.md`
+- 工具：`tools/check_dbus_system_conf.py`（扫描 DBus system.d 配置，输出 default policy 下的 allow own 与所属包）
+- 内部复用模块：`tools/_common.py`（按行读文件、systemctl show、外部命令执行、错误分类等）
+- 过程性文档：`doc/changelog.md`、`.codex/plan/DBus安全检查清单转换.md`、`.codex/plan/systemd-service-cap检查工具.md`、`.codex/plan/systemd-service-cap工具增强.md`、`.codex/plan/systemd-service-fs-scope检查工具.md`、`.codex/plan/deb二进制cap与s位检查工具.md`、`.codex/plan/polkit-actionid隐式授权检查工具.md`、`.codex/plan/dbus-systemd默认policy-own检查工具.md`
 
 ## 流程视图（UML/mermaid）
 
@@ -28,6 +30,7 @@ flowchart LR
   D --> G[运行工具: check_service_fs_scope.py]
   D --> H[运行工具: check_deb_binaries_privilege.py]
   D --> I[运行工具: check_polkit_action_implicit.py]
+  D --> J[运行工具: check_dbus_system_conf.py]
 ```
 
 ## 数据模型（UML/mermaid）

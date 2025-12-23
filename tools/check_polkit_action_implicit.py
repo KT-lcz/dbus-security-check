@@ -10,6 +10,8 @@ import subprocess
 import sys
 from typing import Any, Iterable
 
+from _common import classify_file_not_found, dpkg_query_owners, read_non_empty_lines, run_command, sanitize_line
+
 
 # 基于 DBus 安全检查表的约定：
 # - 输入为 actionid 列表（按行分隔），逐个执行 `pkaction -a <actionid> -v`
@@ -31,37 +33,8 @@ POLICY_SEARCH_DIRS = (
 
 ACTION_ID_RE = re.compile(r"<action\s+id\s*=\s*['\"]([^'\"]+)['\"]", re.IGNORECASE)
 
-_ZERO_WIDTH_TRANSLATION = str.maketrans(
-    "",
-    "",
-    "\ufeff\u200b\u200c\u200d\u2060",
-)
-
-
-def _sanitize_line(raw: str) -> str:
-    return raw.strip().translate(_ZERO_WIDTH_TRANSLATION)
-
-
-def _read_non_empty_lines(path: str) -> list[str]:
-    items: list[str] = []
-    with open(path, "r", encoding="utf-8-sig") as handle:
-        for raw in handle:
-            line = _sanitize_line(raw)
-            if not line or line.startswith("#"):
-                continue
-            items.append(line)
-    return items
-
-
 def _run_command(args: list[str], timeout_seconds: float) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=timeout_seconds,
-    )
+    return run_command(args, timeout_seconds)
 
 
 def _is_action_not_found_message(message: str) -> bool:
@@ -109,31 +82,6 @@ def _index_policy_actions(search_dirs: Iterable[str]) -> dict[str, list[str]]:
     return {k: sorted(v) for k, v in index.items()}
 
 
-def _parse_dpkg_query_owner(stdout: str) -> list[str]:
-    packages: set[str] = set()
-    for raw in stdout.splitlines():
-        line = raw.strip()
-        if not line or ":" not in line:
-            continue
-        left, _ = line.split(":", 1)
-        for name in left.split(","):
-            pkg = name.strip()
-            if pkg:
-                packages.add(pkg)
-    return sorted(packages)
-
-
-def _dpkg_query_owners(path: str, timeout_seconds: float) -> list[str]:
-    completed = _run_command([SYSTEM_COMMANDS["dpkg_query"], "-S", path], timeout_seconds)
-    if completed.returncode == 0:
-        return _parse_dpkg_query_owner(completed.stdout)
-
-    message = (completed.stderr or completed.stdout or "").strip().lower()
-    if "no path found" in message or "no packages found" in message:
-        return []
-    raise RuntimeError((completed.stderr or completed.stdout or "").strip() or "dpkg-query -S failed")
-
-
 def _build_summary(results: list[dict[str, Any]]) -> dict[str, int]:
     summary = {"total": len(results), "ok": 0, "not_found": 0, "error": 0, "flagged": 0}
     for r in results:
@@ -156,9 +104,9 @@ def _load_action_ids(action_id: str | None, actions_file: str | None) -> list[st
         raise ValueError("either an actionid argument or --actions-file is required")
 
     if action_id:
-        return [_sanitize_line(action_id)]
+        return [sanitize_line(action_id)]
 
-    action_ids = _read_non_empty_lines(actions_file or "")
+    action_ids = read_non_empty_lines(actions_file or "")
     if not action_ids:
         raise ValueError("actions file is empty")
     return action_ids
@@ -260,7 +208,7 @@ def main(argv: list[str]) -> int:
                     packages: set[str] = set()
                     for policy_file in policy_files:
                         if policy_file not in owners_cache:
-                            owners_cache[policy_file] = _dpkg_query_owners(policy_file, args.timeout)
+                            owners_cache[policy_file] = dpkg_query_owners(policy_file, args.timeout)
                         packages.update(owners_cache[policy_file])
                     result["policy_files"] = policy_files
                     result["packages"] = sorted(packages)
@@ -304,12 +252,9 @@ def main(argv: list[str]) -> int:
             return 0
         return 0
     except FileNotFoundError as exc:
-        missing = os.path.basename(getattr(exc, "filename", "") or "")
-        if missing in {SYSTEM_COMMANDS["pkaction"], SYSTEM_COMMANDS["dpkg_query"]}:
-            print(f"ERROR: {missing} not found in PATH", file=sys.stderr)
-            return 127
-        print(f"ERROR: file not found: {getattr(exc, 'filename', '')}", file=sys.stderr)
-        return 1
+        exit_code, message = classify_file_not_found(exc, {SYSTEM_COMMANDS["pkaction"], SYSTEM_COMMANDS["dpkg_query"]})
+        print(message, file=sys.stderr)
+        return exit_code
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -317,4 +262,3 @@ def main(argv: list[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from typing import Any
+
+from _common import classify_file_not_found, parse_key_value_lines, read_non_empty_lines, sanitize_line, split_tokens, systemctl_show
 
 
 # 基于 DBus 安全检查表的约定：
@@ -24,35 +25,6 @@ SYSTEMCTL_PROPERTIES = (
     "AmbientCapabilities",
 )
 
-_ZERO_WIDTH_TRANSLATION = str.maketrans(
-    "",
-    "",
-    "\ufeff\u200b\u200c\u200d\u2060",
-)
-
-
-def _split_tokens(value: str) -> list[str]:
-    value = value.strip()
-    if not value:
-        return []
-    return [token for token in value.split() if token]
-
-
-def _sanitize_line(raw: str) -> str:
-    return raw.strip().translate(_ZERO_WIDTH_TRANSLATION)
-
-
-def _read_non_empty_lines(path: str) -> list[str]:
-    items: list[str] = []
-    with open(path, "r", encoding="utf-8-sig") as handle:
-        for raw in handle:
-            line = _sanitize_line(raw)
-            if not line or line.startswith("#"):
-                continue
-            items.append(line)
-    return items
-
-
 def _normalize_cap_token(token: str) -> str:
     return token.strip().lower()
 
@@ -63,41 +35,7 @@ def _normalize_cap_list(tokens: list[str]) -> list[str]:
 
 
 def _parse_systemctl_show(output: str) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for line in output.splitlines():
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        result[key.strip()] = value
-    return result
-
-
-def _run_systemctl_show(service: str, timeout_seconds: float) -> str:
-    args = ["systemctl", "--no-pager", "show", service]
-    for prop in SYSTEMCTL_PROPERTIES:
-        args.append(f"--property={prop}")
-
-    env = os.environ.copy()
-    env.setdefault("SYSTEMD_COLORS", "0")
-    env.setdefault("SYSTEMD_PAGER", "")
-
-    completed = subprocess.run(
-        args,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=timeout_seconds,
-        env=env,
-    )
-
-    if completed.returncode != 0:
-        if (completed.stdout or "").strip():
-            return completed.stdout
-        message = (completed.stderr or "").strip() or "systemctl show failed"
-        raise RuntimeError(message)
-
-    return completed.stdout
+    return parse_key_value_lines(output)
 
 
 def _build_result(service: str, kv: dict[str, str]) -> dict[str, Any]:
@@ -108,11 +46,11 @@ def _build_result(service: str, kv: dict[str, str]) -> dict[str, Any]:
     is_root = (not user_field.strip()) or user.lower() == "root"
 
     group = (kv.get("Group") or "").strip()
-    supplementary_groups = _split_tokens(kv.get("SupplementaryGroups") or "")
+    supplementary_groups = split_tokens(kv.get("SupplementaryGroups") or "")
     groups = sorted({g for g in ([group] if group else []) + supplementary_groups})
 
-    capability_bounding_set = _split_tokens(kv.get("CapabilityBoundingSet") or "")
-    ambient_capabilities = _split_tokens(kv.get("AmbientCapabilities") or "")
+    capability_bounding_set = split_tokens(kv.get("CapabilityBoundingSet") or "")
+    ambient_capabilities = split_tokens(kv.get("AmbientCapabilities") or "")
 
     if is_root:
         effective_capabilities = capability_bounding_set
@@ -199,10 +137,10 @@ def _compare_effective_caps(actual_caps: list[str], expected_caps: list[str]) ->
 def _load_expected_caps(path: str | None) -> list[str] | None:
     if not path:
         return None
-    lines = _read_non_empty_lines(path)
+    lines = read_non_empty_lines(path)
     tokens: list[str] = []
     for line in lines:
-        tokens.extend(_split_tokens(line))
+        tokens.extend(split_tokens(line))
     return _normalize_cap_list(tokens)
 
 
@@ -213,9 +151,9 @@ def _load_services(service: str | None, services_file: str | None) -> list[str]:
         raise ValueError("either a service argument or --services-file is required")
 
     if service:
-        return [_sanitize_line(service)]
+        return [sanitize_line(service)]
 
-    services = _read_non_empty_lines(services_file or "")
+    services = read_non_empty_lines(services_file or "")
     if not services:
         raise ValueError("services file is empty")
     return services
@@ -253,7 +191,7 @@ def main(argv: list[str]) -> int:
                 print("")
 
             try:
-                output = _run_systemctl_show(service, args.timeout)
+                output = systemctl_show(service, SYSTEMCTL_PROPERTIES, args.timeout)
                 kv = _parse_systemctl_show(output)
                 result = _build_result(service, kv)
 
@@ -321,12 +259,9 @@ def main(argv: list[str]) -> int:
             return 1
         return 0
     except FileNotFoundError as exc:
-        missing = os.path.basename(getattr(exc, "filename", "") or "")
-        if missing == "systemctl":
-            print("ERROR: systemctl not found in PATH", file=sys.stderr)
-            return 127
-        print(f"ERROR: file not found: {getattr(exc, 'filename', '')}", file=sys.stderr)
-        return 1
+        exit_code, message = classify_file_not_found(exc, {"systemctl"})
+        print(message, file=sys.stderr)
+        return exit_code
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
