@@ -1,5 +1,52 @@
 # 变更记录
 
+## 2025-12-24T13:27:35+08:00
+
+### 修改目的
+
+- 为 polkit implicit 检查增加仅输出风险项的参数，便于批量结果聚焦。
+
+### 修改范围
+
+- 更新 `tools/check_polkit_action_implicit.py`
+- 更新 `doc/architecture.md`
+- 更新 `doc/changelog.md`
+- 新增 `.codex/plan/polkit-implicit仅输出风险项.md`
+
+### 修改内容
+
+- 新增 `--only-flagged` 参数：JSON 结果仅保留风险项与错误项；文本输出抑制非风险输出与 summary。
+- 更新架构文档中该工具能力描述。
+
+### 对整体项目的影响
+
+- 输出更聚焦高风险/待人工分析项，便于对接门禁或后续人工复核流程。
+- 默认行为保持不变；新参数为可选增强。
+
+## 2025-12-24T13:19:52+08:00
+
+### 修改目的
+
+- 为 polkit implicit 配置引入风险分级输出，区分高风险与待人工分析项。
+
+### 修改范围
+
+- 更新 `tools/check_polkit_action_implicit.py`
+- 更新 `doc/architecture.md`
+- 更新 `doc/changelog.md`
+- 新增 `.codex/plan/polkit-implicit风险分级.md`
+
+### 修改内容
+
+- 新增隐式授权值的风险分级：`yes` 标记为高风险，`auth_self/auth_self_keep` 标记为待人工分析。
+- 文本输出新增 `RiskLevel/RiskFields`；JSON 结果新增 `risk_level/risk_fields`。
+- 更新架构文档中该工具的描述以体现分级规则。
+
+### 对整体项目的影响
+
+- 风险报告可直接区分高风险与待人工分析项，提升复核效率与整改优先级排序。
+- 新增字段为增量输出，不影响现有脚本主流程；下游若需消费风险分级可按新字段解析。
+
 ## 2025-12-24T11:00:43+08:00
 
 ### 修改目的

@@ -15,7 +15,8 @@ from _common import classify_file_not_found, dpkg_query_owners, read_non_empty_l
 
 # 基于 DBus 安全检查表的约定：
 # - 输入为 actionid 列表（按行分隔），逐个执行 `pkaction -a <actionid> -v`
-# - 检查 implicit any / implicit inactive / implicit active 是否为 yes/auth_self/auth_self_keep
+# - 检查 implicit any / implicit inactive / implicit active 的配置值
+# - 风险分级：yes=高风险；auth_self/auth_self_keep=待人工分析
 # - 若命中，则输出 actionid、所属包（通过定位 .policy 文件并用 dpkg-query -S 查找）以及对应字段值
 
 SYSTEM_COMMANDS = {
@@ -23,7 +24,9 @@ SYSTEM_COMMANDS = {
     "dpkg_query": "dpkg-query",
 }
 
-FLAG_VALUES = {"yes", "auth_self", "auth_self_keep"}
+RISK_FIELD_KEYS = ("implicit any", "implicit inactive", "implicit active")
+HIGH_RISK_VALUES = {"yes"}
+REVIEW_VALUES = {"auth_self", "auth_self_keep"}
 
 POLICY_SEARCH_DIRS = (
     "/usr/share/polkit-1/actions",
@@ -51,7 +54,7 @@ def _parse_pkaction_verbose(output: str) -> dict[str, str]:
         key, value = line.split(":", 1)
         key_norm = key.strip().lower()
         value_norm = value.strip()
-        if key_norm in {"implicit any", "implicit inactive", "implicit active"}:
+        if key_norm in RISK_FIELD_KEYS:
             implicit[key_norm] = value_norm
     return implicit
 
@@ -116,6 +119,53 @@ def _format_list(values: list[str]) -> str:
     return " ".join(values) if values else "(unknown)"
 
 
+def _normalize_implicit_value(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def _classify_implicit(implicit: dict[str, str]) -> tuple[str, dict[str, str], dict[str, bool]]:
+    risk_fields: dict[str, str] = {}
+    flagged_fields: dict[str, bool] = {}
+    any_high = False
+    any_review = False
+    any_value = False
+    for key in RISK_FIELD_KEYS:
+        value_norm = _normalize_implicit_value(implicit.get(key))
+        if value_norm:
+            any_value = True
+        if value_norm in HIGH_RISK_VALUES:
+            risk = "high"
+            any_high = True
+        elif value_norm in REVIEW_VALUES:
+            risk = "manual-review"
+            any_review = True
+        elif value_norm:
+            risk = "none"
+        else:
+            risk = "unknown"
+        risk_fields[key] = risk
+        flagged_fields[key] = risk in {"high", "manual-review"}
+    if any_high:
+        overall = "high"
+    elif any_review:
+        overall = "manual-review"
+    elif any_value:
+        overall = "none"
+    else:
+        overall = "unknown"
+    return overall, risk_fields, flagged_fields
+
+
+def _format_risk_fields(values: dict[str, str]) -> str:
+    if not values:
+        return "(unknown)"
+    parts = []
+    for key in RISK_FIELD_KEYS:
+        if key in values:
+            parts.append(f"{key}={values[key]}")
+    return " ".join(parts) if parts else "(unknown)"
+
+
 def _print_finding(result: dict[str, Any]) -> None:
     print(f"ActionId: {result['action_id']}")
     print(f"Packages: {_format_list(result.get('packages') or [])}")
@@ -123,6 +173,8 @@ def _print_finding(result: dict[str, Any]) -> None:
     print(f"ImplicitAny: {implicit.get('implicit any') or '(unknown)'}")
     print(f"ImplicitInactive: {implicit.get('implicit inactive') or '(unknown)'}")
     print(f"ImplicitActive: {implicit.get('implicit active') or '(unknown)'}")
+    print(f"RiskLevel: {result.get('risk_level') or '(unknown)'}")
+    print(f"RiskFields: {_format_risk_fields(result.get('risk_fields') or {})}")
     if result.get("policy_files"):
         print(f"PolicyFiles: {_format_list(result.get('policy_files') or [])}")
 
@@ -141,6 +193,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--json",
         action="store_true",
         help="Output JSON to stdout (useful for CI pipelines).",
+    )
+    parser.add_argument(
+        "--only-flagged",
+        action="store_true",
+        help="Only output flagged actions (and errors) in JSON; suppress non-flagged text output.",
     )
     parser.add_argument(
         "--timeout",
@@ -188,11 +245,8 @@ def main(argv: list[str]) -> int:
                     continue
 
                 implicit = _parse_pkaction_verbose(completed.stdout)
-                flag_fields = {
-                    k: (implicit.get(k, "").strip().lower() in FLAG_VALUES)
-                    for k in ("implicit any", "implicit inactive", "implicit active")
-                }
-                flagged = any(flag_fields.values())
+                risk_level, risk_fields, flag_fields = _classify_implicit(implicit)
+                flagged = risk_level in {"high", "manual-review"}
 
                 result: dict[str, Any] = {
                     "action_id": action_id,
@@ -200,6 +254,8 @@ def main(argv: list[str]) -> int:
                     "implicit": implicit,
                     "flagged": flagged,
                     "flagged_fields": flag_fields,
+                    "risk_level": risk_level,
+                    "risk_fields": risk_fields,
                 }
 
                 if flagged:
@@ -220,7 +276,7 @@ def main(argv: list[str]) -> int:
 
                 if flagged:
                     _print_finding(result)
-                elif len(action_ids) == 1:
+                elif len(action_ids) == 1 and not args.only_flagged:
                     print(f"ActionId: {action_id}")
                     print("Findings: (none)")
             except FileNotFoundError:
@@ -238,8 +294,15 @@ def main(argv: list[str]) -> int:
                     print(f"ERROR: {exc}", file=sys.stderr)
 
         if args.json:
-            print(json.dumps({"results": results, "summary": _build_summary(results)}, indent=2, ensure_ascii=False, sort_keys=True))
-        elif len(action_ids) > 1:
+            output_results = results
+            if args.only_flagged:
+                output_results = [
+                    r
+                    for r in results
+                    if r.get("status") != "ok" or bool(r.get("flagged"))
+                ]
+            print(json.dumps({"results": output_results, "summary": _build_summary(results)}, indent=2, ensure_ascii=False, sort_keys=True))
+        elif len(action_ids) > 1 and not args.only_flagged:
             summary = _build_summary(results)
             print("")
             print("Summary: " + " ".join(f"{k}={v}" for k, v in summary.items()))

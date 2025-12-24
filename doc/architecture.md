@@ -9,7 +9,7 @@
 - 工具：`tools/check_service_cap.py`（支持单个/批量 service 检查；可对比期望 Cap）
 - 工具：`tools/check_service_fs_scope.py`（输出 service 文件系统可读/可写范围摘要；检测 /var/lib /var/run /run 显式使用并给出 StateDirectory/RuntimeDirectory 提示）
 - 工具：`tools/check_deb_binaries_privilege.py`（扫描已安装 deb 包内可执行文件，输出具有 capabilities 或 setuid/setgid 的二进制与所属包）
-- 工具：`tools/check_polkit_action_implicit.py`（批量检查 actionid 的 implicit any/inactive/active，命中 yes/auth_self/auth_self_keep 时输出 actionid、所属包与配置）
+- 工具：`tools/check_polkit_action_implicit.py`（批量检查 actionid 的 implicit any/inactive/active，风险分级：yes=高风险、auth_self/auth_self_keep=待人工分析；支持仅输出风险项，并输出 actionid、所属包与配置）
 - 工具：`tools/check_dbus_system_conf.py`（扫描 DBus system.d 配置：1) default policy 下 allow own；2) root-own service methods 排除 default deny 后的残留方法集）
 - 工具：`tools/dbus_access_control_check.py`（基于 Codex 的 DBus 方法访问控制检查，支持 JSON/JSONL 方法清单与逐条结果落盘）
 - 工具：`tools/command_injection_check.py`（基于 Codex 的命令注入检查，按检查类型输出结构化结果与元数据）
