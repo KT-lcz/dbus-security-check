@@ -1,5 +1,48 @@
 # 变更记录
 
+## 2025-12-24T16:04:22+08:00
+
+### 修改目的
+
+- 在汇总结果中显式列出未通过的 DBus 接口，便于快速定位问题项。
+
+### 修改范围
+
+- 更新 `tools/dbus_access_control_check.py`
+- 更新 `doc/changelog.md`
+- 新增 `.codex/plan/dbus-access-control-summary未通过列表.md`
+
+### 修改内容
+
+- `summary.json` 新增 `not_passed` 列表，记录 `fail/unknown/error` 的接口条目与状态。
+- `results` 条目新增 `summary` 字段，便于汇总层直接判定通过状态。
+
+### 对整体项目的影响
+
+- 汇总层可直接识别未通过接口，不影响逐条输出结构与检查逻辑。
+
+## 2025-12-24T15:45:49+08:00
+
+### 修改目的
+
+- 统一 `--only-method` JSON 输出字段命名，避免与下游数据规范不一致。
+
+### 修改范围
+
+- 更新 `tools/check_dbus_system_conf.py`
+- 更新 `README.md`
+- 更新 `doc/changelog.md`
+- 新增 `.codex/plan/dbus-json字段改名.md`
+
+### 修改内容
+
+- `--only-method` 输出字段由 `dbus_path` 调整为 `path`，其余输出结构保持不变。
+- 同步更新文档说明。
+
+### 对整体项目的影响
+
+- 下游消费字段名更统一；仅影响 `--only-method` 输出解析逻辑，其余模式不变。
+
 ## 2025-12-24T15:09:03+08:00
 
 ### 修改目的

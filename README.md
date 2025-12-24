@@ -410,7 +410,7 @@ python3 "./tools/check_dbus_system_conf.py" --services-file "./dbus_services.txt
 
 当同时指定 `--services-file` 与 `--json` 且启用 `--only-method` 时，stdout 输出为 JSON 数组，每个元素仅包含：
 
-- `dbus_path`: string
+- `path`: string
 - `interface`: string
 - `method`: string
 

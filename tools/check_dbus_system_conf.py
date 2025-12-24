@@ -179,7 +179,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--only-method",
         action="store_true",
-        help="In --services-file + --json mode, output only method triplets (dbus_path/interface/method).",
+        help="In --services-file + --json mode, output only method triplets (path/interface/method).",
     )
     parser.add_argument(
         "--timeout",
@@ -370,8 +370,8 @@ def _flatten_method_triplets(results: list[dict[str, Any]]) -> list[dict[str, st
                     triplets.add((str(object_path), str(interface_name), str(method_name)))
 
     return [
-        {"dbus_path": dbus_path, "interface": interface, "method": method}
-        for dbus_path, interface, method in sorted(triplets)
+        {"path": object_path, "interface": interface, "method": method}
+        for object_path, interface, method in sorted(triplets)
     ]
 
 

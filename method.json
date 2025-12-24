@@ -1,1 +1,4 @@
-{"path":"/com/deepin/ABRecovery","interface":"com.deepin.ABRecovery","method":"StartBackup"}
+[
+    {"dbus_path":"/com/deepin/ABRecovery","interface":"com.deepin.ABRecovery","method":"StartBackup"},
+    {"dbus_path":"/com/deepin/ABRecovery","interface":"com.deepin.ABRecovery","method":"StartRestore"}
+]

@@ -152,6 +152,7 @@ def main() -> int:
         "prompt_file": str(prompt_file),
         "results": [],
         "errors": [],
+        "not_passed": [],
     }
 
     for entry in methods:
@@ -169,8 +170,16 @@ def main() -> int:
         if result.returncode != 0:
             error_msg = f"codex exec failed with code {result.returncode}"
             print(f"ERROR: {error_msg}", file=sys.stderr)
-            summary["errors"].append(
-                {"id": method_id, "input": entry, "error": error_msg, "raw_output": str(raw_path)}
+            error_entry = {"id": method_id, "input": entry, "error": error_msg, "raw_output": str(raw_path)}
+            summary["errors"].append(error_entry)
+            summary["not_passed"].append(
+                {
+                    "id": method_id,
+                    "input": entry,
+                    "status": "error",
+                    "error": error_msg,
+                    "raw_output": str(raw_path),
+                }
             )
             write_json(
                 per_method_dir / f"{method_id}.json",
@@ -186,8 +195,16 @@ def main() -> int:
         except ValueError as exc:
             error_msg = str(exc)
             print(f"ERROR: {error_msg}", file=sys.stderr)
-            summary["errors"].append(
-                {"id": method_id, "input": entry, "error": error_msg, "raw_output": str(raw_path)}
+            error_entry = {"id": method_id, "input": entry, "error": error_msg, "raw_output": str(raw_path)}
+            summary["errors"].append(error_entry)
+            summary["not_passed"].append(
+                {
+                    "id": method_id,
+                    "input": entry,
+                    "status": "error",
+                    "error": error_msg,
+                    "raw_output": str(raw_path),
+                }
             )
             write_json(
                 per_method_dir / f"{method_id}.json",
@@ -197,9 +214,28 @@ def main() -> int:
 
         output_path = per_method_dir / f"{method_id}.json"
         write_json(output_path, payload)
+        method_summary = payload.get("summary")
+        if method_summary not in {"pass", "fail", "unknown"}:
+            method_summary = "unknown"
         summary["results"].append(
-            {"id": method_id, "input": entry, "output": str(output_path), "raw_output": str(raw_path)}
+            {
+                "id": method_id,
+                "input": entry,
+                "summary": method_summary,
+                "output": str(output_path),
+                "raw_output": str(raw_path),
+            }
         )
+        if method_summary != "pass":
+            summary["not_passed"].append(
+                {
+                    "id": method_id,
+                    "input": entry,
+                    "status": method_summary,
+                    "output": str(output_path),
+                    "raw_output": str(raw_path),
+                }
+            )
 
     summary_path = output_dir / "summary.json"
     write_json(summary_path, summary)
