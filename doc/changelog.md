@@ -429,3 +429,23 @@
 ### 对整体项目的影响
 
 - 下游可直接消费方法三元组列表，无需解析嵌套 `service -> path -> interface -> method` 结构；但启用该参数时 JSON 顶层结构从 `{results, summary}` 变为数组，已有解析需按需适配。
+
+## 2025-12-23
+- 更新：命令注入提示词移除Node.js示例，补充Go语言外部命令调用与分析流程要求。
+- 新增：命令注入检查提示词 `prompts/command_injection_check.md`。
+- 新增：命令注入检查工具 `tools/command_injection_check.py`。
+- 更新：架构设计文档补充检查类型路由与项目级执行器。
+- 更新：落盘JSON关闭ASCII转义，提升中文可读性。
+- 更新：提示词规定无明确deny的DBus policy不能作为方法级控制，且基于调用者PID信息的控制视为不安全。
+- 更新：提示词明确PID构造Polkit subject不安全，且存在非Polkit访问控制时禁止输出pass/high。
+- 新增：DBus方法访问控制检查提示词模板。
+- 新增：批量执行与汇总工具 `tools/dbus_access_control_check.py`。
+- 更新：架构设计文档，补充新组件与数据流。
+- 更新：计划文件 `dbus_method_access_control_check.md`。
+- 目的：支持批量方法检查、固定JSON输出与结果汇总。
+- 影响范围：`prompts/`、`tools/`、`doc/`、`.codex/plan/`。
+- 对整体影响：完善静态检查流程并降低幻觉风险。
+- 新增：架构文档与计划文件骨架。
+- 目的：建立项目文档与开发约定。
+- 影响范围：`doc/`、`.codex/plan/`。
+- 对整体影响：为后续功能实现提供结构化基础。
